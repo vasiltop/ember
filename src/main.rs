@@ -1,8 +1,8 @@
 mod lexer;
 
 use clap::Parser;
-use std::fs::File;
-use std::{io::BufReader, path::PathBuf};
+use std::fs;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 struct Args {
@@ -12,6 +12,7 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let file = File::open(args.path).unwrap();
-    let file = BufReader::new(file);
+    let bytes = fs::read(args.path).unwrap();
+
+    println!("{:#?}", lexer::parse(&bytes));
 }
