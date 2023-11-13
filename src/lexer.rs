@@ -256,7 +256,7 @@ impl Decode for Literal {
                 for (index, b) in r.iter().enumerate() {
                     if b.is_delim() || b.is_whitespace() || b.is_punc() {
                         return Ok((
-                            &r[index + 1..],
+                            &r[index..],
                             Some(Literal::Number(num.parse().map_err(|_| Error::LexerError)?)),
                         ));
                     }
