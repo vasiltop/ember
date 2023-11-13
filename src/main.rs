@@ -1,3 +1,4 @@
+mod instruction;
 mod lexer;
 
 use clap::Parser;
@@ -13,6 +14,8 @@ fn main() {
     let args = Args::parse();
 
     let bytes = fs::read(args.path).unwrap();
+    let tokens = lexer::parse(&bytes).unwrap();
 
-    println!("{:#?}", lexer::parse(&bytes));
+    let instrctions = instruction::parse(tokens);
+    //println!("{:#?}", instrctions);
 }

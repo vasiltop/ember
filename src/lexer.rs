@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 #[derive(Debug)]
 pub enum Error {
     LexerError,
@@ -11,7 +13,7 @@ macro_rules! decode {
     }};
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Token {
     Keyword(Keyword),
     Arithmetic(Arithmetic),
@@ -45,7 +47,7 @@ impl RawTokenExt for u8 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Delimeter {
     ParenOpen,
     ParenClose,
@@ -95,7 +97,7 @@ impl Decode for Token {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Keyword {
     Let,
     If,
@@ -103,6 +105,7 @@ pub enum Keyword {
     While,
     For,
     Fn,
+    Print,
 }
 
 impl Decode for Keyword {
@@ -116,12 +119,13 @@ impl Decode for Keyword {
             [b'w', b'h', b'i', b'l', b'e', b' ' | b'\n', r @ ..] => (r, Some(Keyword::While)),
             [b'f', b'o', b'r', b' ' | b'\n', r @ ..] => (r, Some(Keyword::For)),
             [b'f', b'n', b' ' | b'\n', r @ ..] => (r, Some(Keyword::Fn)),
+            [b'p', b'r', b'i', b'n', b't', b' ' | b'\n', r @ ..] => (r, Some(Keyword::Print)),
             _ => (bytes, None),
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Identifier(String);
 
 impl Decode for Identifier {
@@ -155,7 +159,7 @@ impl Decode for Identifier {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum Arithmetic {
     Plus,
     Minus,
@@ -178,7 +182,7 @@ impl Decode for Arithmetic {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Op {
     Eq,
     Ne,
@@ -210,12 +214,14 @@ impl Decode for Op {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Literal {
     Number(f64),
     String(String),
     Boolean(bool),
 }
+
+impl Eq for Literal {}
 
 impl Decode for Literal {
     type Error = Error;
@@ -288,8 +294,8 @@ trait Decode: Sized {
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error>;
 }
 
-pub fn parse(bytes: &[u8]) -> Result<Vec<Token>, Error> {
-    let mut tokens = Vec::new();
+pub fn parse(bytes: &[u8]) -> Result<VecDeque<Token>, Error> {
+    let mut tokens = VecDeque::new();
 
     let mut bytes = bytes;
     while !bytes.is_empty() {
@@ -299,7 +305,7 @@ pub fn parse(bytes: &[u8]) -> Result<Vec<Token>, Error> {
         //println!("{token:?}");
 
         bytes = b;
-        tokens.push(token);
+        tokens.push_back(token);
     }
 
     Ok(tokens)
