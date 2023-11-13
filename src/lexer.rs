@@ -108,6 +108,7 @@ pub enum Keyword {
     For,
     Fn,
     Print,
+    Return,
 }
 
 impl Decode for Keyword {
@@ -121,13 +122,17 @@ impl Decode for Keyword {
             [b'w', b'h', b'i', b'l', b'e', b' ' | b'\n', r @ ..] => (r, Some(Keyword::While)),
             [b'f', b'o', b'r', b' ' | b'\n', r @ ..] => (r, Some(Keyword::For)),
             [b'f', b'n', b' ' | b'\n', r @ ..] => (r, Some(Keyword::Fn)),
-            [b'p', b'r', b'i', b'n', b't', b' ' | b'\n', r @ ..] => (r, Some(Keyword::Print)),
+            [b'p', b'r', b'i', b'n', b't', b'!', r @ ..] => (r, Some(Keyword::Print)),
+            [b'r', b'e', b't', b'u', b'r', b'n', b' ' | b'\n', r @ ..] => {
+                (r, Some(Keyword::Return))
+            }
+
             _ => (bytes, None),
         })
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct Identifier(pub String);
 
 impl Decode for Identifier {
@@ -217,7 +222,7 @@ impl Decode for Op {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Number(f64),
     String(String),

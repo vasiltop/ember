@@ -1,7 +1,6 @@
-use clap::Id;
-
 use crate::body::Body;
 use crate::lexer::{Arithmetic, Delimeter, Identifier, Keyword, Literal, Op, Token};
+use crate::scope::Scope;
 use std::collections::VecDeque;
 
 #[derive(Debug)]
@@ -29,7 +28,7 @@ impl Parser {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Instruction {
     For {
         setup: Box<Instruction>,
@@ -53,7 +52,6 @@ pub enum Instruction {
         ident: Identifier,
         args: Vec<Identifier>,
         body: Body,
-        return_type: Option<Expression>,
     },
     While {
         condition: Expression,
@@ -63,9 +61,16 @@ pub enum Instruction {
         ident: Identifier,
         expression: Expression,
     },
+    FnCall {
+        ident: Identifier,
+        args: Vec<Expression>,
+    },
+    Return {
+        expression: Expression,
+    },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expression {
     Operation {
         lhs: Box<Expression>,
@@ -76,13 +81,69 @@ pub enum Expression {
     Identifier(Identifier),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExpressionArithmetic {
     Arithmetic(Arithmetic),
     Op(Op),
 }
 
 impl Expression {
+    pub fn resolve(&self, scope: &Scope) -> Literal {
+        match self {
+            Expression::Literal(literal) => literal.clone(),
+            Expression::Identifier(ident) => {
+                if let Some(literal) = scope.get(ident) {
+                    literal.clone()
+                } else {
+                    panic!("could not find variable: {:?}", ident)
+                }
+            }
+
+            Expression::Operation { lhs, op, rhs } => {
+                let lhs = lhs.resolve(scope);
+                let rhs = rhs.resolve(scope);
+
+                match (op, lhs, rhs) {
+                    (_, Literal::Number(lhs), Literal::Number(rhs)) => match op {
+                        ExpressionArithmetic::Arithmetic(Arithmetic::Plus) => {
+                            Literal::Number(lhs + rhs)
+                        }
+                        ExpressionArithmetic::Arithmetic(Arithmetic::Minus) => {
+                            Literal::Number(lhs - rhs)
+                        }
+                        ExpressionArithmetic::Arithmetic(Arithmetic::Mul) => {
+                            Literal::Number(lhs * rhs)
+                        }
+                        ExpressionArithmetic::Arithmetic(Arithmetic::Div) => {
+                            Literal::Number(lhs / rhs)
+                        }
+                        ExpressionArithmetic::Arithmetic(Arithmetic::Mod) => {
+                            Literal::Number(lhs % rhs)
+                        }
+                        ExpressionArithmetic::Op(Op::Eq) => Literal::Boolean(lhs == rhs),
+                        ExpressionArithmetic::Op(Op::Ge) => Literal::Boolean(lhs >= rhs),
+                        ExpressionArithmetic::Op(Op::Gt) => Literal::Boolean(lhs > rhs),
+                        ExpressionArithmetic::Op(Op::Le) => Literal::Boolean(lhs <= rhs),
+                        ExpressionArithmetic::Op(Op::Lt) => Literal::Boolean(lhs < rhs),
+                        ExpressionArithmetic::Op(Op::Ne) => Literal::Boolean(lhs != rhs),
+                        _ => panic!("cannot resolve expression: {:?}", self),
+                    },
+                    (
+                        ExpressionArithmetic::Arithmetic(Arithmetic::Plus),
+                        Literal::String(lhs),
+                        Literal::String(rhs),
+                    ) => Literal::String(lhs + &rhs),
+                    (_, Literal::Boolean(lhs), Literal::Boolean(rhs)) => match op {
+                        ExpressionArithmetic::Op(Op::And) => Literal::Boolean(lhs && rhs),
+                        ExpressionArithmetic::Op(Op::Or) => Literal::Boolean(lhs || rhs),
+                        _ => panic!("cannot resolve expression: {:?}", self),
+                    },
+                    _ => panic!("cannot resolve expression: {:?}", self),
+                }
+            }
+        }
+    }
+
     fn parse(tokens: &mut Parser) -> Result<Self, Error> {
         let mut lhs = Self::parse_comparison(tokens)?;
 
@@ -176,9 +237,9 @@ impl Expression {
         match tokens.next() {
             Some(Token::Identifier(ident)) => Ok(Expression::Identifier(ident)),
             Some(Token::Literal(literal)) => Ok(Expression::Literal(literal)),
+
             Some(Token::Delimeter(Delimeter::ParenOpen)) => {
                 let expr = Expression::parse(tokens)?;
-
                 match tokens.next() {
                     Some(Token::Delimeter(Delimeter::ParenClose)) => Ok(expr),
                     _ => Err(Error::ParserError),
@@ -206,6 +267,14 @@ pub fn parse(tokens: VecDeque<Token>) -> Result<Vec<Instruction>, Error> {
 impl Instruction {
     pub fn parse(tokens: &mut Parser) -> Result<Instruction, Error> {
         match tokens.next() {
+            Some(Token::Keyword(Keyword::Return)) => {
+                let expression = Expression::parse(tokens)?;
+
+                match tokens.next() {
+                    Some(Token::Semicolon) => Ok(Instruction::Return { expression }),
+                    _ => panic!("could not find semicolon for the return statement"),
+                }
+            }
             Some(Token::Keyword(Keyword::Let)) => {
                 let ident = match tokens.next() {
                     Some(Token::Identifier(ident)) => ident,
@@ -232,8 +301,9 @@ impl Instruction {
 
                 let body = Body::parse(tokens)?;
 
-                match tokens.next() {
+                match tokens.peek() {
                     Some(Token::Keyword(Keyword::Else)) => {
+                        tokens.next();
                         match tokens.next() {
                             Some(Token::Delimeter(Delimeter::CurlyOpen)) => {}
                             _ => panic!("could not find curly open for the else statement"),
@@ -327,12 +397,7 @@ impl Instruction {
 
                 let body = Body::parse(tokens)?;
 
-                Ok(Instruction::Fn {
-                    ident,
-                    args,
-                    body,
-                    return_type: None,
-                })
+                Ok(Instruction::Fn { ident, args, body })
             }
             Some(Token::Keyword(Keyword::While)) => {
                 let condition = Expression::parse(tokens)?;
@@ -346,15 +411,44 @@ impl Instruction {
                 Ok(Instruction::While { condition, body })
             }
             Some(Token::Identifier(ident)) => {
+                println!("ident: {:?}", ident);
                 match tokens.next() {
-                    Some(Token::Eq) => {}
-                    _ => panic!("could not find equal sign for the variable"),
-                }
-                let expression = Expression::parse(tokens)?;
+                    Some(Token::Eq) => {
+                        let expression = Expression::parse(tokens)?;
 
-                match tokens.next() {
-                    Some(Token::Semicolon) => Ok(Instruction::Reassign { ident, expression }),
-                    _ => panic!("could not find semicolon for the variable"),
+                        match tokens.next() {
+                            Some(Token::Semicolon) => {
+                                Ok(Instruction::Reassign { ident, expression })
+                            }
+                            _ => panic!("could not find semicolon for the variable"),
+                        }
+                    }
+                    Some(Token::Delimeter(Delimeter::ParenOpen)) => {
+                        let mut args = Vec::new();
+
+                        while let Some(token) = tokens.peek() {
+                            match token {
+                                Token::Delimeter(Delimeter::ParenClose) => break,
+                                Token::Comma => {
+                                    tokens.next();
+                                }
+                                _ => {
+                                    args.push(Expression::parse(tokens)?);
+                                }
+                            }
+                        }
+
+                        match tokens.next() {
+                            Some(Token::Delimeter(Delimeter::ParenClose)) => {}
+                            _ => panic!("could not find paren close for the function call"),
+                        }
+
+                        match tokens.next() {
+                            Some(Token::Semicolon) => Ok(Instruction::FnCall { ident, args }),
+                            _ => panic!("could not find semicolon for the function call"),
+                        }
+                    }
+                    _ => panic!("could not find equal sign for the variable"),
                 }
             }
             token => panic!("bad instruction: {:?}", token),
