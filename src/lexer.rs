@@ -25,6 +25,7 @@ pub enum Token {
     WhiteSpace,
     Eof,
     Semicolon,
+    Comma,
 }
 
 trait RawTokenExt {
@@ -88,6 +89,7 @@ impl Decode for Token {
         match bytes {
             [b'=', r @ ..] => return Ok((r, Some(Token::Eq))),
             [b';', r @ ..] => return Ok((r, Some(Token::Semicolon))),
+            [b',', r @ ..] => return Ok((r, Some(Token::Comma))),
             _ => {}
         };
 
@@ -126,20 +128,21 @@ impl Decode for Keyword {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct Identifier(String);
+pub struct Identifier(pub String);
 
 impl Decode for Identifier {
     type Error = Error;
 
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error> {
         //The bytes cannot start with a number because it will match the literal check above
-        //println!("{}", String::from_utf8(bytes.to_vec()).unwrap());
+
         for (index, b) in bytes.iter().enumerate() {
             if b.is_whitespace() || b.is_punc() || b.is_delim() {
                 //b cannot be an empty string
                 if index == 0 {
                     return Ok((&[], None));
                 }
+
                 return Ok((
                     &bytes[index..],
                     Some(Identifier(
@@ -300,9 +303,11 @@ pub fn parse(bytes: &[u8]) -> Result<VecDeque<Token>, Error> {
     let mut bytes = bytes;
     while !bytes.is_empty() {
         let (b, Some(token)) = Token::decode(bytes)? else {
-            panic!("bad");
+            panic!(
+                "could not lex: {}",
+                String::from_utf8(bytes.to_vec()).unwrap()
+            );
         };
-        //println!("{token:?}");
 
         bytes = b;
         tokens.push_back(token);

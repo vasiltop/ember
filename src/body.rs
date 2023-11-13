@@ -13,7 +13,6 @@ impl Body {
         let mut instructions = Vec::new();
 
         while let Some(token) = tokens.peek() {
-            // println!("{:?}", token);
             match token {
                 Token::Delimeter(Delimeter::CurlyClose) => {
                     tokens.next();

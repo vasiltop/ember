@@ -1,3 +1,5 @@
+use clap::Id;
+
 use crate::body::Body;
 use crate::lexer::{Arithmetic, Delimeter, Identifier, Keyword, Literal, Op, Token};
 use std::collections::VecDeque;
@@ -19,7 +21,6 @@ impl Parser {
         while self.tokens.front() == Some(&Token::WhiteSpace) {
             self.tokens.pop_front();
         }
-        //println!("{:?}", token);
         token
     }
 
@@ -58,10 +59,14 @@ pub enum Instruction {
         condition: Expression,
         body: Body,
     },
+    Reassign {
+        ident: Identifier,
+        expression: Expression,
+    },
 }
 
 #[derive(Debug)]
-enum Expression {
+pub enum Expression {
     Operation {
         lhs: Box<Expression>,
         op: ExpressionArithmetic,
@@ -72,7 +77,7 @@ enum Expression {
 }
 
 #[derive(Debug)]
-enum ExpressionArithmetic {
+pub enum ExpressionArithmetic {
     Arithmetic(Arithmetic),
     Op(Op),
 }
@@ -200,7 +205,6 @@ pub fn parse(tokens: VecDeque<Token>) -> Result<Vec<Instruction>, Error> {
 
 impl Instruction {
     pub fn parse(tokens: &mut Parser) -> Result<Instruction, Error> {
-        //println!("{:?}", tokens.peek());
         match tokens.next() {
             Some(Token::Keyword(Keyword::Let)) => {
                 let ident = match tokens.next() {
@@ -228,7 +232,6 @@ impl Instruction {
 
                 let body = Body::parse(tokens)?;
 
-                //println!("peeked {:?}", tokens.peek());
                 match tokens.next() {
                     Some(Token::Keyword(Keyword::Else)) => {
                         match tokens.next() {
@@ -252,10 +255,108 @@ impl Instruction {
                     }),
                 }
             }
-            //Some(Token::Keyword(Keyword::For)) => {}
-            //Some(Token::Keyword(Keyword::Print)) => {}
-            //Some(Token::Keyword(Keyword::Fn)) => {}
-            // Some(Token::Keyword(Keyword::While)) => {}
+            Some(Token::Keyword(Keyword::For)) => {
+                match tokens.next() {
+                    Some(Token::Delimeter(Delimeter::ParenOpen)) => {}
+                    _ => panic!("could not find paren open for the for statement"),
+                }
+
+                let setup = Box::new(Instruction::parse(tokens)?);
+
+                let condition = Expression::parse(tokens)?;
+
+                match tokens.next() {
+                    Some(Token::Semicolon) => {}
+                    _ => panic!("could not find semicolon 2 for the for statement"),
+                }
+
+                let post = Box::new(Instruction::parse(tokens)?);
+
+                match tokens.next() {
+                    Some(Token::Delimeter(Delimeter::ParenClose)) => {}
+                    _ => panic!("could not find paren close for the for statement"),
+                }
+
+                match tokens.next() {
+                    Some(Token::Delimeter(Delimeter::CurlyOpen)) => {}
+                    _ => panic!("could not find curly open for the for statement"),
+                }
+
+                let body = Body::parse(tokens)?;
+
+                Ok(Instruction::For {
+                    setup,
+                    condition,
+                    post,
+                    body,
+                })
+            }
+            Some(Token::Keyword(Keyword::Print)) => {
+                let expression = Expression::parse(tokens)?;
+                match tokens.next() {
+                    Some(Token::Semicolon) => Ok(Instruction::Print { expression }),
+                    _ => panic!("could not find semicolon for the print statement"),
+                }
+            }
+            Some(Token::Keyword(Keyword::Fn)) => {
+                let ident = match tokens.next() {
+                    Some(Token::Identifier(ident)) => ident,
+                    token => panic!("could not find the identifier for the function: {token:?}"),
+                };
+
+                match tokens.next() {
+                    Some(Token::Delimeter(Delimeter::ParenOpen)) => {}
+                    _ => panic!("could not find paren open for the function"),
+                }
+
+                let mut args = Vec::new();
+
+                while let Some(Token::Identifier(ident)) = tokens.next() {
+                    args.push(ident);
+                    match tokens.next() {
+                        Some(Token::Delimeter(Delimeter::ParenClose)) => break,
+                        Some(Token::Comma) => {}
+                        _ => panic!("could not find comma or paren close for the function"),
+                    }
+                }
+
+                match tokens.next() {
+                    Some(Token::Delimeter(Delimeter::CurlyOpen)) => {}
+                    _ => panic!("could not find curly open for the function"),
+                }
+
+                let body = Body::parse(tokens)?;
+
+                Ok(Instruction::Fn {
+                    ident,
+                    args,
+                    body,
+                    return_type: None,
+                })
+            }
+            Some(Token::Keyword(Keyword::While)) => {
+                let condition = Expression::parse(tokens)?;
+                match tokens.next() {
+                    Some(Token::Delimeter(Delimeter::CurlyOpen)) => {}
+                    _ => panic!("could not find curly open for the while statement"),
+                }
+
+                let body = Body::parse(tokens)?;
+
+                Ok(Instruction::While { condition, body })
+            }
+            Some(Token::Identifier(ident)) => {
+                match tokens.next() {
+                    Some(Token::Eq) => {}
+                    _ => panic!("could not find equal sign for the variable"),
+                }
+                let expression = Expression::parse(tokens)?;
+
+                match tokens.next() {
+                    Some(Token::Semicolon) => Ok(Instruction::Reassign { ident, expression }),
+                    _ => panic!("could not find semicolon for the variable"),
+                }
+            }
             token => panic!("bad instruction: {:?}", token),
         }
     }

@@ -1,5 +1,8 @@
-if true {   
-    let a = 5;
-} else {
-    let b = 1 + 2 / 3;
+for 
+(
+    let i = 0; 
+    i < 10; 
+    i = i + 1;
+) {
+    print i;
 }
