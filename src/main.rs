@@ -1,6 +1,6 @@
+mod body;
 mod instruction;
 mod lexer;
-
 use clap::Parser;
 use std::fs;
 use std::path::PathBuf;
@@ -15,7 +15,7 @@ fn main() {
 
     let bytes = fs::read(args.path).unwrap();
     let tokens = lexer::parse(&bytes).unwrap();
-    //println!("{:#?}", tokens);
-    let instrctions = instruction::parse(tokens);
-    //println!("{:#?}", instrctions);
+    println!("{:#?}", tokens);
+    let instruction = instruction::parse(tokens);
+    println!("{:#?}", instruction);
 }

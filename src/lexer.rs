@@ -182,7 +182,7 @@ impl Decode for Arithmetic {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum Op {
     Eq,
     Ne,
