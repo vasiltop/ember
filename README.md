@@ -29,7 +29,7 @@ let name = "Ember";
 ## Control Flow
 
 ```rust
-if x == 1 and true {
+if x == 1 && true {
     x = 4;
 } else {
     x = 7;
