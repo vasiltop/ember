@@ -1,5 +1,7 @@
-fn hello(a, b) {
-    print!(a + b);
+fn hello() {
+    return 5;
 }
 
-hello(1, 2);
+let a = 5 + hello();
+
+print!(a);

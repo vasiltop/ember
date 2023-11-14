@@ -79,6 +79,10 @@ pub enum Expression {
     },
     Literal(Literal),
     Identifier(Identifier),
+    Function {
+        ident: Identifier,
+        args: Vec<Expression>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -88,58 +92,70 @@ pub enum ExpressionArithmetic {
 }
 
 impl Expression {
-    pub fn resolve(&self, scope: &Scope) -> Literal {
+    pub fn resolve(&self, scope: Scope) -> (Scope, Literal) {
         match self {
-            Expression::Literal(literal) => literal.clone(),
+            Expression::Function { ident, args } => {
+                let func = scope.get_func(ident).unwrap().clone();
+                let (s, value) = func.resolve(scope, args);
+
+                match value {
+                    Some(value) => (s, value),
+                    None => panic!("function did not return a value"),
+                }
+            }
+            Expression::Literal(literal) => (scope, literal.clone()),
             Expression::Identifier(ident) => {
-                if let Some(literal) = scope.get(ident) {
-                    literal.clone()
+                if let Some(literal) = scope.get(ident).cloned() {
+                    (scope, literal)
                 } else {
                     panic!("could not find variable: {:?}", ident)
                 }
             }
 
             Expression::Operation { lhs, op, rhs } => {
-                let lhs = lhs.resolve(scope);
-                let rhs = rhs.resolve(scope);
+                let (s, lhs) = lhs.resolve(scope);
+                let (s, rhs) = rhs.resolve(s);
 
-                match (op, lhs, rhs) {
-                    (_, Literal::Number(lhs), Literal::Number(rhs)) => match op {
-                        ExpressionArithmetic::Arithmetic(Arithmetic::Plus) => {
-                            Literal::Number(lhs + rhs)
-                        }
-                        ExpressionArithmetic::Arithmetic(Arithmetic::Minus) => {
-                            Literal::Number(lhs - rhs)
-                        }
-                        ExpressionArithmetic::Arithmetic(Arithmetic::Mul) => {
-                            Literal::Number(lhs * rhs)
-                        }
-                        ExpressionArithmetic::Arithmetic(Arithmetic::Div) => {
-                            Literal::Number(lhs / rhs)
-                        }
-                        ExpressionArithmetic::Arithmetic(Arithmetic::Mod) => {
-                            Literal::Number(lhs % rhs)
-                        }
-                        ExpressionArithmetic::Op(Op::Eq) => Literal::Boolean(lhs == rhs),
-                        ExpressionArithmetic::Op(Op::Ge) => Literal::Boolean(lhs >= rhs),
-                        ExpressionArithmetic::Op(Op::Gt) => Literal::Boolean(lhs > rhs),
-                        ExpressionArithmetic::Op(Op::Le) => Literal::Boolean(lhs <= rhs),
-                        ExpressionArithmetic::Op(Op::Lt) => Literal::Boolean(lhs < rhs),
-                        ExpressionArithmetic::Op(Op::Ne) => Literal::Boolean(lhs != rhs),
+                (
+                    s,
+                    match (op, lhs, rhs) {
+                        (_, Literal::Number(lhs), Literal::Number(rhs)) => match op {
+                            ExpressionArithmetic::Arithmetic(Arithmetic::Plus) => {
+                                Literal::Number(lhs + rhs)
+                            }
+                            ExpressionArithmetic::Arithmetic(Arithmetic::Minus) => {
+                                Literal::Number(lhs - rhs)
+                            }
+                            ExpressionArithmetic::Arithmetic(Arithmetic::Mul) => {
+                                Literal::Number(lhs * rhs)
+                            }
+                            ExpressionArithmetic::Arithmetic(Arithmetic::Div) => {
+                                Literal::Number(lhs / rhs)
+                            }
+                            ExpressionArithmetic::Arithmetic(Arithmetic::Mod) => {
+                                Literal::Number(lhs % rhs)
+                            }
+                            ExpressionArithmetic::Op(Op::Eq) => Literal::Boolean(lhs == rhs),
+                            ExpressionArithmetic::Op(Op::Ge) => Literal::Boolean(lhs >= rhs),
+                            ExpressionArithmetic::Op(Op::Gt) => Literal::Boolean(lhs > rhs),
+                            ExpressionArithmetic::Op(Op::Le) => Literal::Boolean(lhs <= rhs),
+                            ExpressionArithmetic::Op(Op::Lt) => Literal::Boolean(lhs < rhs),
+                            ExpressionArithmetic::Op(Op::Ne) => Literal::Boolean(lhs != rhs),
+                            _ => panic!("cannot resolve expression: {:?}", self),
+                        },
+                        (
+                            ExpressionArithmetic::Arithmetic(Arithmetic::Plus),
+                            Literal::String(lhs),
+                            Literal::String(rhs),
+                        ) => Literal::String(lhs + &rhs),
+                        (_, Literal::Boolean(lhs), Literal::Boolean(rhs)) => match op {
+                            ExpressionArithmetic::Op(Op::And) => Literal::Boolean(lhs && rhs),
+                            ExpressionArithmetic::Op(Op::Or) => Literal::Boolean(lhs || rhs),
+                            _ => panic!("cannot resolve expression: {:?}", self),
+                        },
                         _ => panic!("cannot resolve expression: {:?}", self),
                     },
-                    (
-                        ExpressionArithmetic::Arithmetic(Arithmetic::Plus),
-                        Literal::String(lhs),
-                        Literal::String(rhs),
-                    ) => Literal::String(lhs + &rhs),
-                    (_, Literal::Boolean(lhs), Literal::Boolean(rhs)) => match op {
-                        ExpressionArithmetic::Op(Op::And) => Literal::Boolean(lhs && rhs),
-                        ExpressionArithmetic::Op(Op::Or) => Literal::Boolean(lhs || rhs),
-                        _ => panic!("cannot resolve expression: {:?}", self),
-                    },
-                    _ => panic!("cannot resolve expression: {:?}", self),
-                }
+                )
             }
         }
     }
@@ -235,7 +251,38 @@ impl Expression {
 
     fn parse_paren_literal_ident(tokens: &mut Parser) -> Result<Self, Error> {
         match tokens.next() {
-            Some(Token::Identifier(ident)) => Ok(Expression::Identifier(ident)),
+            Some(Token::Identifier(ident)) => match tokens.peek() {
+                Some(Token::Delimeter(Delimeter::ParenOpen)) => {
+                    tokens.next();
+                    let mut args = Vec::new();
+
+                    if tokens.peek() != Some(&Token::Delimeter(Delimeter::ParenClose)) {
+                        args.push(Expression::parse(tokens)?);
+                    }
+
+                    while let Some(token) = tokens.peek() {
+                        match token {
+                            Token::Delimeter(Delimeter::ParenClose) => break,
+                            Token::Comma => {
+                                tokens.next();
+                                args.push(Expression::parse(tokens)?);
+                            }
+                            _ => {
+                                panic!("could not find comma or paren close for the function")
+                            }
+                        }
+                    }
+
+                    match tokens.next() {
+                        Some(Token::Delimeter(Delimeter::ParenClose)) => {}
+                        _ => panic!("could not find paren close for the function call"),
+                    }
+
+                    Ok(Expression::Function { ident, args })
+                }
+                _ => Ok(Expression::Identifier(ident)),
+            },
+
             Some(Token::Literal(literal)) => Ok(Expression::Literal(literal)),
 
             Some(Token::Delimeter(Delimeter::ParenOpen)) => {

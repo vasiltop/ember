@@ -1,42 +1,53 @@
-use crate::{instruction::Instruction, scope::Scope};
+use crate::{instruction::Instruction, lexer::Literal, scope::Scope};
 
-pub fn execute(instructions: &[Instruction], mut scope: Scope) -> Scope {
+pub fn execute(instructions: &[Instruction], mut scope: Scope) -> (Scope, Option<Literal>) {
     for instruction in instructions {
         match instruction {
-            Instruction::Print { expression } => println!("{:?}", expression.resolve(&scope)),
+            Instruction::Print { expression } => {
+                let (s, value) = expression.resolve(scope);
+                scope = s;
+                println!("{:?}", value)
+            }
             Instruction::Let { ident, expression } => {
-                scope.set(ident.clone(), expression.resolve(&scope));
+                let (s, value) = expression.resolve(scope);
+                scope = s;
+                scope.set(ident.clone(), value);
             }
             Instruction::Reassign { ident, expression } => {
-                scope.reassign(ident.clone(), expression.resolve(&scope));
+                let (s, value) = expression.resolve(scope);
+                scope = s;
+                scope.reassign(ident.clone(), value);
             }
             Instruction::If {
                 condition,
                 body,
                 else_body,
-            } => match condition.resolve(&scope) {
-                crate::lexer::Literal::Boolean(true) => {
+            } => match condition.resolve(scope) {
+                (s, crate::lexer::Literal::Boolean(true)) => {
                     let mut child_scope = Scope::default();
-                    child_scope.parent = Some(Box::new(scope));
-                    child_scope = execute(&body.instructions, child_scope);
+                    child_scope.parent = Some(Box::new(s));
+                    (child_scope, _) = execute(&body.instructions, child_scope);
                     scope = child_scope.close();
                 }
-                crate::lexer::Literal::Boolean(false) => {
+                (s, crate::lexer::Literal::Boolean(false)) => {
                     let mut child_scope = Scope::default();
-                    child_scope.parent = Some(Box::new(scope));
-                    child_scope = execute(&else_body.instructions, child_scope);
+                    child_scope.parent = Some(Box::new(s));
+                    (child_scope, _) = execute(&else_body.instructions, child_scope);
                     scope = child_scope.close();
                 }
                 _ => panic!("Expected boolean literal"),
             },
-            Instruction::While { condition, body } => {
-                while let crate::lexer::Literal::Boolean(true) = condition.resolve(&scope) {
-                    let mut child_scope = Scope::default();
-                    child_scope.parent = Some(Box::new(scope));
-                    child_scope = execute(&body.instructions, child_scope);
-                    scope = child_scope.close();
+            Instruction::While { condition, body } => loop {
+                let (s, lit) = condition.resolve(scope);
+                if let crate::lexer::Literal::Boolean(false) = lit {
+                    scope = s;
+                    break;
                 }
-            }
+                let mut child_scope = Scope::default();
+                child_scope.parent = Some(Box::new(s));
+                (child_scope, _) = execute(&body.instructions, child_scope);
+                scope = child_scope.close();
+            },
             Instruction::For {
                 setup,
                 condition,
@@ -45,14 +56,20 @@ pub fn execute(instructions: &[Instruction], mut scope: Scope) -> Scope {
             } => {
                 let mut child_scope = Scope::default();
                 child_scope.parent = Some(Box::new(scope));
-                child_scope = execute(&[*setup.clone()], child_scope);
+                (child_scope, _) = execute(&[*setup.clone()], child_scope);
 
-                while let crate::lexer::Literal::Boolean(true) = condition.resolve(&child_scope) {
+                loop {
+                    let (s, lit) = condition.resolve(child_scope);
+                    child_scope = s;
+                    if let crate::lexer::Literal::Boolean(false) = lit {
+                        break;
+                    }
+
                     let mut inner_scope = Scope::default();
                     inner_scope.parent = Some(Box::new(child_scope));
-                    inner_scope = execute(&body.instructions, inner_scope);
+                    (inner_scope, _) = execute(&body.instructions, inner_scope);
                     child_scope = inner_scope.close();
-                    child_scope = execute(&[*post.clone()], child_scope);
+                    (child_scope, _) = execute(&[*post.clone()], child_scope);
                 }
 
                 scope = child_scope.close();
@@ -71,16 +88,21 @@ pub fn execute(instructions: &[Instruction], mut scope: Scope) -> Scope {
                 let func = scope.get_func(ident).unwrap().clone();
                 let mut child_scope = Scope::default();
 
-                for (arg, value) in func.args.iter().zip(args.iter()) {
-                    child_scope.set(arg.clone(), value.resolve(&child_scope));
+                for (arg, expression) in func.args.iter().zip(args.iter()) {
+                    let (s, value) = expression.resolve(child_scope);
+                    child_scope = s;
+                    child_scope.set(arg.clone(), value);
                 }
 
                 child_scope.parent = Some(Box::new(scope));
-                child_scope = execute(&func.body.instructions, child_scope);
+                (child_scope, _) = execute(&func.body.instructions, child_scope);
                 scope = child_scope.close();
             }
-            Instruction::Return { expression } => {}
+            Instruction::Return { expression } => {
+                let (s, value) = expression.resolve(scope);
+                return (s, Some(value));
+            }
         }
     }
-    scope
+    (scope, None)
 }

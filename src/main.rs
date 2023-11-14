@@ -18,7 +18,7 @@ fn main() {
 
     let bytes = fs::read(args.path).unwrap();
     let tokens = lexer::parse(&bytes).unwrap();
-    println!("{:#?}", tokens);
+    //println!("{:#?}", tokens);
     let instructions = instruction::parse(tokens).unwrap();
     //println!("{:#?}", instructions);
     executor::execute(&instructions, scope::Scope::default());

@@ -1,6 +1,7 @@
 use crate::{
     body::Body,
-    instruction::Expression,
+    executor::execute,
+    instruction::{Error, Expression},
     lexer::{Identifier, Literal},
 };
 use std::collections::HashMap;
@@ -17,6 +18,22 @@ pub struct Fn {
     pub ident: Identifier,
     pub args: Vec<Identifier>,
     pub body: Body,
+}
+
+impl Fn {
+    pub fn resolve(&self, scope: Scope, args: &[Expression]) -> (Scope, Option<Literal>) {
+        let mut child_scope = Scope::default();
+        child_scope.parent = Some(Box::new(scope));
+        for (arg, expr) in self.args.iter().zip(args.iter()) {
+            let (s, value) = expr.resolve(child_scope);
+            child_scope = s;
+            child_scope.set(arg.clone(), value);
+        }
+
+        let (s, value) = execute(&self.body.instructions, child_scope);
+
+        (s.close(), value)
+    }
 }
 
 impl Scope {
