@@ -1,7 +1,7 @@
 use crate::{
     body::Body,
     executor::execute,
-    instruction::Expression,
+    instruction::{Expression, InstructionError},
     lexer::{Identifier, Literal},
 };
 
@@ -22,18 +22,22 @@ pub struct Fn {
 }
 
 impl Fn {
-    pub fn resolve(&self, scope: Scope, args: &[Expression]) -> (Scope, Option<Literal>) {
+    pub fn resolve(
+        &self,
+        scope: Scope,
+        args: &[Expression],
+    ) -> Result<(Scope, Option<Literal>), InstructionError> {
         let mut child_scope = Scope::default();
         child_scope.parent = Some(Box::new(scope));
         for (arg, expr) in self.args.iter().zip(args.iter()) {
-            let (s, value) = expr.resolve(child_scope);
+            let (s, value) = expr.resolve(child_scope)?;
             child_scope = s;
             child_scope.set(arg.clone(), value);
         }
 
-        let (s, value) = execute(&self.body.instructions, child_scope);
+        let (s, value) = execute(&self.body.instructions, child_scope)?;
 
-        (s.close(), value)
+        Ok((s.close(), value))
     }
 }
 

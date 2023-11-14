@@ -1,5 +1,5 @@
 use crate::{
-    instruction::{Error, Instruction, Parser},
+    instruction::{Instruction, InstructionError, Parser},
     lexer::{Delimeter, Token},
 };
 
@@ -9,7 +9,7 @@ pub struct Body {
 }
 
 impl Body {
-    pub fn parse(tokens: &mut Parser) -> Result<Self, Error> {
+    pub fn parse(tokens: &mut Parser) -> Result<Self, InstructionError> {
         let mut instructions = Vec::new();
 
         while let Some(token) = tokens.peek() {

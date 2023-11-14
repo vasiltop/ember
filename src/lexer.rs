@@ -1,8 +1,14 @@
 use std::{collections::VecDeque, fmt::Display};
+use thiserror::Error;
 
-#[derive(Debug)]
-pub enum Error {
-    LexerError,
+#[derive(Debug, Error)]
+pub enum LexerError {
+    #[error("invalid utf8")]
+    InvalidUtf8,
+    #[error("invalid number")]
+    InvalidNumber,
+    #[error("invalid token")]
+    TokenError,
 }
 
 macro_rules! decode {
@@ -57,21 +63,21 @@ pub enum Delimeter {
 }
 
 impl Decode for Delimeter {
-    type Error = Error;
+    type Error = LexerError;
 
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error> {
         match bytes {
-            [b'(', r @ ..] => return Ok((r, Some(Delimeter::ParenOpen))),
-            [b')', r @ ..] => return Ok((r, Some(Delimeter::ParenClose))),
-            [b'{', r @ ..] => return Ok((r, Some(Delimeter::CurlyOpen))),
-            [b'}', r @ ..] => return Ok((r, Some(Delimeter::CurlyClose))),
+            [b'(', r @ ..] => Ok((r, Some(Delimeter::ParenOpen))),
+            [b')', r @ ..] => Ok((r, Some(Delimeter::ParenClose))),
+            [b'{', r @ ..] => Ok((r, Some(Delimeter::CurlyOpen))),
+            [b'}', r @ ..] => Ok((r, Some(Delimeter::CurlyClose))),
             _ => Ok((bytes, None)),
         }
     }
 }
 
 impl Decode for Token {
-    type Error = Error;
+    type Error = LexerError;
 
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error> {
         match bytes {
@@ -112,7 +118,7 @@ pub enum Keyword {
 }
 
 impl Decode for Keyword {
-    type Error = Error;
+    type Error = LexerError;
 
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error> {
         Ok(match bytes {
@@ -136,7 +142,7 @@ impl Decode for Keyword {
 pub struct Identifier(pub String);
 
 impl Decode for Identifier {
-    type Error = Error;
+    type Error = LexerError;
 
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error> {
         //The bytes cannot start with a number because it will match the literal check above
@@ -152,7 +158,7 @@ impl Decode for Identifier {
                     &bytes[index..],
                     Some(Identifier(
                         String::from_utf8(bytes[..index].to_vec())
-                            .map_err(|_| Error::LexerError)?,
+                            .map_err(|_| LexerError::InvalidUtf8)?,
                     )),
                 ));
             }
@@ -161,7 +167,7 @@ impl Decode for Identifier {
         Ok((
             &[],
             Some(Identifier(
-                String::from_utf8(bytes.to_vec()).map_err(|_| Error::LexerError)?,
+                String::from_utf8(bytes.to_vec()).map_err(|_| LexerError::InvalidUtf8)?,
             )),
         ))
     }
@@ -177,7 +183,7 @@ pub enum Arithmetic {
 }
 
 impl Decode for Arithmetic {
-    type Error = Error;
+    type Error = LexerError;
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error> {
         match bytes {
             [b'+', r @ ..] => Ok((r, Some(Arithmetic::Plus))),
@@ -204,7 +210,7 @@ pub enum Op {
 }
 
 impl Decode for Op {
-    type Error = Error;
+    type Error = LexerError;
 
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error> {
         match bytes {
@@ -242,7 +248,7 @@ impl Display for Literal {
 impl Eq for Literal {}
 
 impl Decode for Literal {
-    type Error = Error;
+    type Error = LexerError;
 
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error> {
         match bytes {
@@ -275,7 +281,9 @@ impl Decode for Literal {
                     if b.is_delim() || b.is_whitespace() || b.is_punc() {
                         return Ok((
                             &r[index..],
-                            Some(Literal::Number(num.parse().map_err(|_| Error::LexerError)?)),
+                            Some(Literal::Number(
+                                num.parse().map_err(|_| LexerError::InvalidNumber)?,
+                            )),
                         ));
                     }
 
@@ -284,18 +292,20 @@ impl Decode for Literal {
 
                 Ok((
                     r,
-                    Some(Literal::Number(num.parse().map_err(|_| Error::LexerError)?)),
+                    Some(Literal::Number(
+                        num.parse().map_err(|_| LexerError::InvalidNumber)?,
+                    )),
                 ))
             }
             [b'f', b'a', b'l', b's', b'e', r @ ..]
-                if r.get(0)
+                if r.first()
                     .map(|a| a.is_whitespace() || a.is_delim() || a.is_punc())
                     .unwrap_or(true) =>
             {
                 Ok((r, Some(Literal::Boolean(false))))
             }
             [b't', b'r', b'u', b'e', r @ ..]
-                if r.get(0)
+                if r.first()
                     .map(|a| a.is_whitespace() || a.is_delim() || a.is_punc())
                     .unwrap_or(true) =>
             {
@@ -312,16 +322,13 @@ trait Decode: Sized {
     fn decode(bytes: &[u8]) -> Result<(&[u8], Option<Self>), Self::Error>;
 }
 
-pub fn parse(bytes: &[u8]) -> Result<VecDeque<Token>, Error> {
+pub fn parse(bytes: &[u8]) -> Result<VecDeque<Token>, LexerError> {
     let mut tokens = VecDeque::new();
 
     let mut bytes = bytes;
     while !bytes.is_empty() {
         let (b, Some(token)) = Token::decode(bytes)? else {
-            panic!(
-                "could not lex: {}",
-                String::from_utf8(bytes.to_vec()).unwrap()
-            );
+            return Err(LexerError::TokenError);
         };
 
         bytes = b;
