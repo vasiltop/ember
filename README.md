@@ -2,7 +2,7 @@
 
 Ember is a simple interpreter programming language that follows the fundamental syntax of many popular programming languages.
 
-[![Test Status] (https://github.com/vasiltop/ember/workflows/test/badge.svg)] (htthttps://github.com/vasiltop/ember/actions)
+[![Test Status](https://github.com/vasiltop/ember/workflows/test/badge.svg)](htthttps://github.com/vasiltop/ember/actions)
 
 ## Installation
 
