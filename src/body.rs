@@ -3,7 +3,7 @@ use crate::{
     lexer::{Delimeter, Token},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Body {
     pub instructions: Vec<Instruction>,
 }

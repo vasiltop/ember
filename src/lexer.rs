@@ -337,3 +337,43 @@ pub fn parse(bytes: &[u8]) -> Result<VecDeque<Token>, LexerError> {
 
     Ok(tokens)
 }
+
+#[cfg(test)]
+
+mod test {
+
+    #[test]
+    fn test_assign() {
+        use super::*;
+        let tokens = parse(b"let a = 1;").unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Keyword(Keyword::Let),
+                Token::Identifier(Identifier("a".to_string())),
+                Token::WhiteSpace,
+                Token::Eq,
+                Token::WhiteSpace,
+                Token::Literal(Literal::Number(1.0)),
+                Token::Semicolon,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_reassign() {
+        use super::*;
+        let tokens = parse(b"a = 1;").unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Identifier(Identifier("a".to_string())),
+                Token::WhiteSpace,
+                Token::Eq,
+                Token::WhiteSpace,
+                Token::Literal(Literal::Number(1.0)),
+                Token::Semicolon,
+            ]
+        );
+    }
+}

@@ -42,7 +42,7 @@ impl Parser {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Instruction {
     For {
         setup: Box<Instruction>,
@@ -84,7 +84,7 @@ pub enum Instruction {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Expression {
     Operation {
         lhs: Box<Expression>,
@@ -99,7 +99,7 @@ pub enum Expression {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ExpressionArithmetic {
     Arithmetic(Arithmetic),
     Op(Op),
@@ -567,16 +567,51 @@ impl Instruction {
 
                     match tokens.next() {
                         Some(Token::Semicolon) => Ok(Instruction::FnCall { ident, args }),
-                        _ => {
-                            return Err(InstructionError::MissingToken {
-                                token: Token::Semicolon,
-                            })
-                        }
+                        _ => Err(InstructionError::MissingToken {
+                            token: Token::Semicolon,
+                        }),
                     }
                 }
-                _ => return Err(InstructionError::MissingToken { token: Token::Eq }),
+                _ => Err(InstructionError::MissingToken { token: Token::Eq }),
             },
-            token => Err(InstructionError::InvalidInstruction),
+            _ => Err(InstructionError::InvalidInstruction),
         }
+    }
+}
+
+#[cfg(test)]
+
+mod test {
+
+    #[test]
+    fn test_assign() {
+        use super::*;
+        use crate::lexer::parse;
+        let tokens = parse(b"let a = 1;").unwrap();
+        let instructions = super::parse(tokens).unwrap();
+
+        assert_eq!(
+            instructions,
+            vec![Instruction::Let {
+                ident: Identifier("a".to_string()),
+                expression: Expression::Literal(Literal::Number(1.0))
+            }]
+        );
+    }
+
+    #[test]
+    fn test_reassign() {
+        use super::*;
+        use crate::lexer::parse;
+        let tokens = parse(b"a = 1;").unwrap();
+        let instructions = super::parse(tokens).unwrap();
+
+        assert_eq!(
+            instructions,
+            vec![Instruction::Reassign {
+                ident: Identifier("a".to_string()),
+                expression: Expression::Literal(Literal::Number(1.0))
+            }]
+        );
     }
 }
