@@ -109,7 +109,10 @@ impl Expression {
     pub fn resolve(&self, scope: Scope) -> Result<(Scope, Literal), InstructionError> {
         match self {
             Expression::Function { ident, args } => {
-                let func = scope.get_func(ident).unwrap().clone();
+                let func = scope
+                    .get_func(ident)
+                    .ok_or(InstructionError::InvalidFunctionCall)?
+                    .clone();
                 let (s, value) = func.resolve(scope, args)?;
 
                 match value {

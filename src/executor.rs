@@ -92,7 +92,10 @@ pub fn execute(
                 );
             }
             Instruction::FnCall { ident, args } => {
-                let func = scope.get_func(ident).unwrap().clone();
+                let func = scope
+                    .get_func(ident)
+                    .ok_or(InstructionError::InvalidFunctionCall)?
+                    .clone();
                 let mut child_scope = Scope::default();
 
                 for (arg, expression) in func.args.iter().zip(args.iter()) {
