@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::Display};
 
 #[derive(Debug)]
 pub enum Error {
@@ -227,6 +227,16 @@ pub enum Literal {
     Number(f64),
     String(String),
     Boolean(bool),
+}
+
+impl Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::Number(n) => write!(f, "{}", n),
+            Literal::String(s) => write!(f, "{}", s),
+            Literal::Boolean(b) => write!(f, "{}", b),
+        }
+    }
 }
 
 impl Eq for Literal {}

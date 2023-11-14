@@ -457,47 +457,42 @@ impl Instruction {
 
                 Ok(Instruction::While { condition, body })
             }
-            Some(Token::Identifier(ident)) => {
-                println!("ident: {:?}", ident);
-                match tokens.next() {
-                    Some(Token::Eq) => {
-                        let expression = Expression::parse(tokens)?;
+            Some(Token::Identifier(ident)) => match tokens.next() {
+                Some(Token::Eq) => {
+                    let expression = Expression::parse(tokens)?;
 
-                        match tokens.next() {
-                            Some(Token::Semicolon) => {
-                                Ok(Instruction::Reassign { ident, expression })
-                            }
-                            _ => panic!("could not find semicolon for the variable"),
-                        }
+                    match tokens.next() {
+                        Some(Token::Semicolon) => Ok(Instruction::Reassign { ident, expression }),
+                        _ => panic!("could not find semicolon for the variable"),
                     }
-                    Some(Token::Delimeter(Delimeter::ParenOpen)) => {
-                        let mut args = Vec::new();
-
-                        while let Some(token) = tokens.peek() {
-                            match token {
-                                Token::Delimeter(Delimeter::ParenClose) => break,
-                                Token::Comma => {
-                                    tokens.next();
-                                }
-                                _ => {
-                                    args.push(Expression::parse(tokens)?);
-                                }
-                            }
-                        }
-
-                        match tokens.next() {
-                            Some(Token::Delimeter(Delimeter::ParenClose)) => {}
-                            _ => panic!("could not find paren close for the function call"),
-                        }
-
-                        match tokens.next() {
-                            Some(Token::Semicolon) => Ok(Instruction::FnCall { ident, args }),
-                            _ => panic!("could not find semicolon for the function call"),
-                        }
-                    }
-                    _ => panic!("could not find equal sign for the variable"),
                 }
-            }
+                Some(Token::Delimeter(Delimeter::ParenOpen)) => {
+                    let mut args = Vec::new();
+
+                    while let Some(token) = tokens.peek() {
+                        match token {
+                            Token::Delimeter(Delimeter::ParenClose) => break,
+                            Token::Comma => {
+                                tokens.next();
+                            }
+                            _ => {
+                                args.push(Expression::parse(tokens)?);
+                            }
+                        }
+                    }
+
+                    match tokens.next() {
+                        Some(Token::Delimeter(Delimeter::ParenClose)) => {}
+                        _ => panic!("could not find paren close for the function call"),
+                    }
+
+                    match tokens.next() {
+                        Some(Token::Semicolon) => Ok(Instruction::FnCall { ident, args }),
+                        _ => panic!("could not find semicolon for the function call"),
+                    }
+                }
+                _ => panic!("could not find equal sign for the variable"),
+            },
             token => panic!("bad instruction: {:?}", token),
         }
     }

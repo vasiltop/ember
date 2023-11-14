@@ -1,9 +1,10 @@
 use crate::{
     body::Body,
     executor::execute,
-    instruction::{Error, Expression},
+    instruction::Expression,
     lexer::{Identifier, Literal},
 };
+
 use std::collections::HashMap;
 
 #[derive(Default)]

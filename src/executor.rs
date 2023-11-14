@@ -6,7 +6,7 @@ pub fn execute(instructions: &[Instruction], mut scope: Scope) -> (Scope, Option
             Instruction::Print { expression } => {
                 let (s, value) = expression.resolve(scope);
                 scope = s;
-                println!("{:?}", value)
+                println!("{}", value)
             }
             Instruction::Let { ident, expression } => {
                 let (s, value) = expression.resolve(scope);
