@@ -32,7 +32,12 @@ fn main() -> Result<(), Error> {
     //println!("{:#?}", tokens);
     let instructions = instruction::parse(tokens)?;
     //println!("{:#?}", instructions);
-    executor::execute(&instructions, scope::Scope::default())?;
+
+    executor::execute(
+        &instructions,
+        scope::Scope::default(),
+        &mut std::io::stdout(),
+    )?;
 
     Ok(())
 }

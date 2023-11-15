@@ -7,21 +7,22 @@ use crate::{
 pub fn execute(
     instructions: &[Instruction],
     mut scope: Scope,
+    io: &mut impl std::io::Write,
 ) -> Result<(Scope, Option<Literal>), InstructionError> {
     for instruction in instructions {
         match instruction {
             Instruction::Print { expression } => {
-                let (s, value) = expression.resolve(scope)?;
+                let (s, value) = expression.resolve(scope, io)?;
                 scope = s;
-                println!("{}", value)
+                writeln!(io, "{}", value);
             }
             Instruction::Let { ident, expression } => {
-                let (s, value) = expression.resolve(scope)?;
+                let (s, value) = expression.resolve(scope, io)?;
                 scope = s;
                 scope.set(ident.clone(), value);
             }
             Instruction::Reassign { ident, expression } => {
-                let (s, value) = expression.resolve(scope)?;
+                let (s, value) = expression.resolve(scope, io)?;
                 scope = s;
                 scope.reassign(ident.clone(), value);
             }
@@ -29,30 +30,30 @@ pub fn execute(
                 condition,
                 body,
                 else_body,
-            } => match condition.resolve(scope) {
+            } => match condition.resolve(scope, io) {
                 Ok((s, crate::lexer::Literal::Boolean(true))) => {
                     let mut child_scope = Scope::default();
                     child_scope.parent = Some(Box::new(s));
-                    (child_scope, _) = execute(&body.instructions, child_scope)?;
+                    (child_scope, _) = execute(&body.instructions, child_scope, io)?;
                     scope = child_scope.close();
                 }
                 Ok((s, crate::lexer::Literal::Boolean(false))) => {
                     let mut child_scope = Scope::default();
                     child_scope.parent = Some(Box::new(s));
-                    (child_scope, _) = execute(&else_body.instructions, child_scope)?;
+                    (child_scope, _) = execute(&else_body.instructions, child_scope, io)?;
                     scope = child_scope.close();
                 }
                 _ => panic!("Expected boolean literal"),
             },
             Instruction::While { condition, body } => loop {
-                let (s, lit) = condition.resolve(scope)?;
+                let (s, lit) = condition.resolve(scope, io)?;
                 if let crate::lexer::Literal::Boolean(false) = lit {
                     scope = s;
                     break;
                 }
                 let mut child_scope = Scope::default();
                 child_scope.parent = Some(Box::new(s));
-                (child_scope, _) = execute(&body.instructions, child_scope)?;
+                (child_scope, _) = execute(&body.instructions, child_scope, io)?;
                 scope = child_scope.close();
             },
             Instruction::For {
@@ -63,10 +64,10 @@ pub fn execute(
             } => {
                 let mut child_scope = Scope::default();
                 child_scope.parent = Some(Box::new(scope));
-                (child_scope, _) = execute(&[*setup.clone()], child_scope)?;
+                (child_scope, _) = execute(&[*setup.clone()], child_scope, io)?;
 
                 loop {
-                    let (s, lit) = condition.resolve(child_scope)?;
+                    let (s, lit) = condition.resolve(child_scope, io)?;
                     child_scope = s;
                     if let crate::lexer::Literal::Boolean(false) = lit {
                         break;
@@ -74,9 +75,9 @@ pub fn execute(
 
                     let mut inner_scope = Scope::default();
                     inner_scope.parent = Some(Box::new(child_scope));
-                    (inner_scope, _) = execute(&body.instructions, inner_scope)?;
+                    (inner_scope, _) = execute(&body.instructions, inner_scope, io)?;
                     child_scope = inner_scope.close();
-                    (child_scope, _) = execute(&[*post.clone()], child_scope)?;
+                    (child_scope, _) = execute(&[*post.clone()], child_scope, io)?;
                 }
 
                 scope = child_scope.close();
@@ -99,17 +100,17 @@ pub fn execute(
                 let mut child_scope = Scope::default();
 
                 for (arg, expression) in func.args.iter().zip(args.iter()) {
-                    let (s, value) = expression.resolve(child_scope)?;
+                    let (s, value) = expression.resolve(child_scope, io)?;
                     child_scope = s;
                     child_scope.set(arg.clone(), value);
                 }
 
                 child_scope.parent = Some(Box::new(scope));
-                (child_scope, _) = execute(&func.body.instructions, child_scope)?;
+                (child_scope, _) = execute(&func.body.instructions, child_scope, io)?;
                 scope = child_scope.close();
             }
             Instruction::Return { expression } => {
-                let (s, value) = expression.resolve(scope)?;
+                let (s, value) = expression.resolve(scope, io)?;
                 return Ok((s, Some(value)));
             }
         }

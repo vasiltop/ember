@@ -106,14 +106,18 @@ pub enum ExpressionArithmetic {
 }
 
 impl Expression {
-    pub fn resolve(&self, scope: Scope) -> Result<(Scope, Literal), InstructionError> {
+    pub fn resolve(
+        &self,
+        scope: Scope,
+        io: &mut impl std::io::Write,
+    ) -> Result<(Scope, Literal), InstructionError> {
         match self {
             Expression::Function { ident, args } => {
                 let func = scope
                     .get_func(ident)
                     .ok_or(InstructionError::InvalidFunctionCall)?
                     .clone();
-                let (s, value) = func.resolve(scope, args)?;
+                let (s, value) = func.resolve(scope, args, io)?;
 
                 match value {
                     Some(value) => Ok((s, value)),
@@ -130,8 +134,8 @@ impl Expression {
             }
 
             Expression::Operation { lhs, op, rhs } => {
-                let (s, lhs) = lhs.resolve(scope)?;
-                let (s, rhs) = rhs.resolve(s)?;
+                let (s, lhs) = lhs.resolve(scope, io)?;
+                let (s, rhs) = rhs.resolve(s, io)?;
 
                 Ok((
                     s,

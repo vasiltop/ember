@@ -26,16 +26,17 @@ impl Fn {
         &self,
         scope: Scope,
         args: &[Expression],
+        io: &mut impl std::io::Write,
     ) -> Result<(Scope, Option<Literal>), InstructionError> {
         let mut child_scope = Scope::default();
         child_scope.parent = Some(Box::new(scope));
         for (arg, expr) in self.args.iter().zip(args.iter()) {
-            let (s, value) = expr.resolve(child_scope)?;
+            let (s, value) = expr.resolve(child_scope, io)?;
             child_scope = s;
             child_scope.set(arg.clone(), value);
         }
 
-        let (s, value) = execute(&self.body.instructions, child_scope)?;
+        let (s, value) = execute(&self.body.instructions, child_scope, io)?;
 
         Ok((s.close(), value))
     }
