@@ -1,6 +1,6 @@
 # Ember
 
-Ember is a simple interpreter programming language that follows the fundamental syntax of many popular programming languages.
+Ember is a simple interpreted programming language that follows the fundamental syntax of many popular programming languages.
 
 [![Test Status](https://github.com/vasiltop/ember/workflows/test/badge.svg)](https://github.com/vasiltop/ember/actions)
 
